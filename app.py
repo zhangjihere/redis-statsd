@@ -1,3 +1,6 @@
+#!/usr/bin/python -u
+# -*- coding: UTF-8 -*-
+
 import logging
 import os
 import socket
@@ -8,9 +11,10 @@ from redis.client import StrictRedis
 
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
-STATSD_HOST = os.environ.get('STATSD_HOST', 'localhost')
-STATSD_PORT = int(os.environ.get('STATSD_PORT', 8125))
-STATSD_PREFIX = os.environ.get('STATSD_PREFIX', 'redis')
+STATSD_HOST = os.environ.get('CONFIG_kamon_statsd_hostname', '172.31.60.150')
+STATSD_PORT = int(os.environ.get('CONFIG_kamon_statsd_port', 8125))
+STATSD_PREFIX = os.environ.get('STATSD_PREFIX', 'openwhisk-workerfarm')
+WORKFARM_NAME = os.environ.get('HOSTNAME', 'my-work-farm').split(',')[0]
 PERIOD = int(os.environ.get('PERIOD', 30))
 
 VERBOSE = '-v' in sys.argv or os.environ.get('VERBOSE', '').lower() in ['true', 'yes']
@@ -24,34 +28,12 @@ if VERBOSE:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-
 GAUGES = {
-    'blocked_clients': 'blocked_clients',
-    'connected_clients': 'connected_clients',
-    'instantaneous_ops_per_sec': 'instantaneous_ops_per_sec',
-    'latest_fork_usec': 'latest_fork_usec',
-    'mem_fragmentation_ratio': 'mem_fragmentation_ratio',
-    'migrate_cached_sockets': 'migrate_cached_sockets',
-    'pubsub_channels': 'pubsub_channels',
-    'pubsub_patterns': 'pubsub_patterns',
-    'uptime_in_seconds': 'uptime_in_seconds',
-    'used_memory': 'used_memory',
-    'used_memory_lua': 'used_memory_lua',
-    'used_memory_peak': 'used_memory_peak',
-    'used_memory_rss': 'used_memory_rss'
+    'idle': 'idle',
+    'in-use': 'in-use'
 }
 
 COUNTERS = {
-    'evicted_keys': 'evicted_keys',
-    'expired_keys': 'expired_keys',
-    'keyspace_hits': 'keyspace_hits',
-    'keyspace_misses': 'keyspace_misses',
-    'rejected_connections': 'rejected_connections',
-    'sync_full': 'sync_full',
-    'sync_partial_err': 'sync_partial_err',
-    'sync_partial_ok': 'sync_partial_ok',
-    'total_commands_processed': 'total_commands_processed',
-    'total_connections_received': 'total_connections_received'
 }
 
 KEYSPACE_COUNTERS = {
@@ -64,6 +46,7 @@ KEYSPACE_GAUGES = {
 }
 
 last_seens = {}
+
 
 def send_metric(out_sock, mkey, mtype, value):
     finalvalue = value
@@ -93,6 +76,7 @@ def main():
             logger.exception(e)
             time.sleep(5)
 
+
 def run_once():
     for port in REDIS_PORT.split(','):
 
@@ -102,40 +86,22 @@ def run_once():
             statsd_prefix = STATSD_PREFIX
 
         redis = StrictRedis(REDIS_HOST, port)
-
-        stats = redis.info()
-        stats['keyspaces'] = {}
-
-        for key in stats.keys():
-            if key.startswith('db'):
-                stats['keyspaces'][key] = stats[key]
-                del stats[key]
-
         out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        for g in GAUGES:
-            if g in stats:
-                send_metric(out_sock, '{}.{}'.format(statsd_prefix, g), 'g', float(stats[g]))
+        lang_list_len = redis.llen('language_list')
+        lang_list = redis.lrange('language_list', 0, lang_list_len)
 
-        for c in COUNTERS:
-            if c in stats:
-                send_metric(out_sock, '{}.{}'.format(statsd_prefix, c), 'c', float(stats[c]))
-
-        for ks in stats['keyspaces']:
-            for kc in KEYSPACE_COUNTERS:
-                if kc in stats['keyspaces'][ks]:
-                    send_metric(out_sock, '{}.keyspace.{}'.format(
-                        statsd_prefix, kc), 'c',
-                    float(stats['keyspaces'][ks][kc]))
-
-            for kg in KEYSPACE_GAUGES:
-                if kg in stats['keyspaces'][ks]:
-                    send_metric(out_sock, '{}.keyspace.{}'.format(
-                        statsd_prefix, kg), 'g',
-                        float(stats['keyspaces'][ks][kg]))
+        for lang in lang_list:
+            max_ctn = redis.llen('{}_{}_{}'.format('language', lang, 'list'))
+            idle_ctn = redis.llen('{}_{}'.format(lang, 'list'))
+            send_metric(out_sock, '{}.{}.{}.{}'.format(statsd_prefix, WORKFARM_NAME, lang, 'idle'), 'g',
+                        float(idle_ctn))
+            send_metric(out_sock, '{}.{}.{}.{}'.format(statsd_prefix, WORKFARM_NAME, lang, 'in-use'), 'g',
+                        float(max_ctn - idle_ctn))
 
         out_sock.close()
         time.sleep(PERIOD)
+
 
 if __name__ == '__main__':
     main()
