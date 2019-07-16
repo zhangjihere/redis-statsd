@@ -28,23 +28,6 @@ if VERBOSE:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-GAUGES = {
-    'idle': 'idle',
-    'in-use': 'in-use'
-}
-
-COUNTERS = {
-}
-
-KEYSPACE_COUNTERS = {
-    'expires': 'expires'
-}
-
-KEYSPACE_GAUGES = {
-    'avg_ttl': 'avg_ttl',
-    'keys': 'keys'
-}
-
 last_seens = {}
 
 
@@ -52,14 +35,9 @@ def send_metric(out_sock, mkey, mtype, value):
     finalvalue = value
 
     if mtype == 'c':
-        # For counters we will calculate our own deltas.
         if mkey in last_seens:
-            # global finalvalue
-            # calculate our deltas and don't go below 0
             finalvalue = max(0, value - last_seens[mkey])
         else:
-            # We'll default to 0, since we don't want our first counter
-            # to be some huge number.
             finalvalue = 0
         last_seens[mkey] = value
 
