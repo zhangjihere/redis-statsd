@@ -1,0 +1,56 @@
+{
+    "version": true,
+    "size": 500,
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "query_string": {
+                        "query": "*",
+                        "analyze_wildcard": true
+                    }
+                },
+                {
+                    "match_phrase": {
+                        "gs.app": {
+                            "query": "hello"
+                        }
+                    }
+                },
+                {
+                    "match_phrase": {
+                        "gs.svcuser": {
+                            "query": "guest"
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "gu.activationId": "74a4d0b0846d4910a4d0b0846db91090"
+                    }
+                }
+            ],
+            "must_not": []
+        }
+    },
+    "_source": {
+        "excludes": []
+    },
+    "aggs": {
+        "2": {
+            "date_histogram": {
+                "field": "@timestamp",
+                "interval": "5m",
+                "time_zone": "Asia/Shanghai",
+                "min_doc_count": 1
+            },
+            "aggs": {
+                "1": {
+                    "avg": {
+                        "field": "gu.duration"
+                    }
+                }
+            }
+        }
+    }
+}
