@@ -14,7 +14,7 @@ REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
 STATSD_HOST = os.environ.get('CONFIG_kamon_statsd_hostname', '172.31.60.150')
 STATSD_PORT = int(os.environ.get('CONFIG_kamon_statsd_port', 8125))
 STATSD_PREFIX = os.environ.get('STATSD_PREFIX', 'openwhisk-workerfarm')
-WORKFARM_NAME = os.environ.get('HOSTNAME', 'my-work-farm').split('.')[0]
+WORKFARM_NAME = os.environ.get('HOSTNAME', 'my-work-farm').split('.')[0].replace('-', '')
 PERIOD = int(os.environ.get('PERIOD', 30))
 
 VERBOSE = '-v' in sys.argv or os.environ.get('VERBOSE', '').lower() in ['true', 'yes']
